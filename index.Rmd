@@ -1,0 +1,370 @@
+---
+title: "รายงานผลการเรียนวิชาสถิติ"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(readxl)
+library(dplyr)
+library(plotly)
+library(tidyr)
+library(tidyverse)
+library(data.table)
+library(knitr)
+
+dat <- read_excel("C:\\Users\\66902\\Desktop\\suricha_final65\\final.xlsx")
+dat <- mutate(dat, avg.time = round((rowMeans(dat[ ,5:18])),2),
+              avg.hw = round((rowMeans(dat[ ,19:32])),2),
+              mid = with(dat, mid40+mid20),
+              fin = with(dat, fin40+fin20))
+
+# dataframe mean time total
+time <- round((colMeans(dat[ ,5:18])),2)
+time_att <- data.frame(week = c(1:14), time)
+
+# dataframe mean time by sec
+tsec4 <- round((colMeans(dat[1:40,5:18])),2)
+tsec5 <- round((colMeans(dat[41:79,5:18])),2)
+week <- rep(c(1:14), times = 2)
+sec <- rep(c("4", "5"), each = 14)
+mtsec <- rep(c(tsec4, tsec5))
+att <- data.frame(week, sec, mtsec)
+
+# data for datatable
+dat1 <- dat%>%select(user,gender, sec, avg.time, avg.hw, mid40, mid20, fin40, fin20)
+
+```
+
+อาจารย์ {data-icon="fa-user-circle-o"}
+==========================================================================
+
+sidebar {.sidebar}
+--------------------------------------------------------------------------
+```{r}
+user_base <- tibble::tibble(
+  user = c("user1", "user2"),
+  password = sapply(c("pass1", "pass2"), sodium::password_store),
+  permissions = c("admin", "standard"),
+  name = c("User One", "User Two")
+)
+
+textInput("tuser","username", 
+          placeholder = "suricha")
+
+passwordInput("tpass", "password",
+          placeholder = "xxxx")
+
+actionButton(inputId = "submit", 
+             label = "Log in",
+             class = "btn-primary")
+
+```
+
+
+Column A {data-height="120"}
+--------------------------------------------------------------------------
+### จำนวนนิสิตทั้งหมด
+
+```{r}
+renderValueBox({
+  dat%>%select(c(sec))%>%count()%>%
+  valueBox(icon = "fa-users", color = "cornflowerblue")
+})
+```
+
+### จำนวนนิสิตตอนเรียนที่ 4
+
+```{r}
+renderValueBox({
+  dat%>%filter(sec =="4")%>%count()%>%
+  valueBox(icon = "fa-users", color = "powderblue")
+})
+```
+
+### จำนวนนิสิตตอนเรียนที่ 5
+
+```{r}
+renderValueBox({
+  dat%>%filter(sec =="5")%>%count()%>%
+  valueBox(icon = "fa-users", color = "powderblue")
+})
+```
+
+Column B {data-height="140"}
+--------------------------------------------------------------------------
+### ภาพรวมคะแนนการบ้าน (homework)
+
+```{r}
+renderGauge({
+  gauge(dat$avg.hw%>%mean(),min = 0, max = 10, symbol = "/10",
+        gaugeSectors(success = c(8,10), warning = c(5,7), danger = c(0,5)))
+})
+```
+
+### ภาพรวมคะแนนโปรเจค (project)
+
+```{r}
+renderGauge({
+  gauge(dat$project%>%mean(),min = 0, max = 20, symbol = "/20",
+        gaugeSectors(success = c(16,20), warning = c(11,15), danger = c(0,10)))
+})
+```
+
+### ภาพรวมคะแนนสอบกลางภาค (midterm)
+
+```{r}
+renderGauge({
+  gauge(dat$mid%>%mean(),min = 0, max = 60, symbol = "/60",
+        gaugeSectors(success = c(50,60), warning = c(31,49), danger = c(0,30)))
+})
+```
+
+### ภาพรวมคะแนนสอบปลายภาค (final)
+
+```{r}
+renderGauge({
+  gauge(dat$fin%>%mean(),min = 0, max = 60, symbol = "/60",
+        gaugeSectors(success = c(50,60), warning = c(31,49), danger = c(0,30)))
+})
+```
+
+Column C {data-height="220"}
+--------------------------------------------------------------------------
+
+### จำนวนนาทีในการเข้าเรียนโดยเฉลี่ยแต่ละสัปดาห์
+
+```{r}
+att%>%
+plot_ly(x = ~week, y = ~mtsec, 
+        color = ~factor(sec),
+        mode = "markers+lines",
+        hoverinfo = "text",
+        text = ~paste("</br>ระยะเวลาการเข้าเรียนเฉลี่ย :", mtsec,"นาที"))%>%
+  layout(yaxis = list(range = c(100,170),
+                      title = "ระยะเวลาการเข้าเรียนเฉลี่ย(นาที)"),
+         xaxis = list(range = c(1,14),
+                      title = "สัปดาห์ที่")
+         )
+```
+
+### ความสัมพันธ์ระหว่างจำนวนนาทีในการเข้าเรียนและคะแนนการบ้าน
+
+```{r}
+dat%>%
+  plot_ly(x = ~avg.hw, y = ~avg.time, 
+          color = ~factor(sec),
+          hoverinfo = "text",
+          text = ~paste("</br>รหัสนิสิต :", user,
+                        "</br>ตอนเรียน :", sec,                    
+                        "</br>การเข้าเรียนโดยเฉลี่ย :", avg.time,"นาที",
+                        "</br>คะแนนการบ้าน :", avg.hw))%>%
+          
+  layout(yaxis = list(range = c(100,170),
+                      title = "ระยะเวลาการเข้าเรียนเฉลี่ย(นาที)"),
+         xaxis = list(range = c(1,10),
+                      title = "คะแนนการบ้านเฉลี่ย")
+         )
+```
+
+Column D {data-height="500"}
+--------------------------------------------------------------------------
+### คะแนนนิสิตรายบุคคล
+
+```{r}
+
+renderDataTable(dat1)
+
+```
+
+นิสิต {data-icon="fa-child"}
+=====================================================================
+sidebar {.sidebar}
+---------------------------------------------------------------------
+```{r}
+textInput("suser", "Student ID", 
+          placeholder = "654xxxxx27")
+
+passwordInput("spass", "Password", 
+          placeholder = "xxxxx")
+
+
+helpText("ทดสอบระบบนิสิต Student ID: รหัสนิสิต password: เลข5ตัวกลางของรหัสนิสิตก่อนเลข27")
+
+```
+
+
+Column A {data-height="120" data-width="50"}
+--------------------------------------------------------------------------
+### คะแนนการบ้านเฉลี่ยทุกตอนเรียน(homework)
+
+```{r}
+renderValueBox({
+homework <-  dat$avg.hw%>%mean()%>%round(2)
+    valueBox(homework, icon = "fa-certificate", color = "primary")
+})
+
+```
+
+### คะแนนโปรเจคเฉลี่ยทุกตอนเรียน(project)
+
+```{r}
+renderValueBox({
+project <- dat$project%>%mean()%>%round(2)
+    valueBox(project, icon = "fa-users", color = "primary")
+})
+
+```
+
+### คะแนนกลางภาคเฉลี่ยทุกตอนเรียน(midterm)
+
+```{r}
+renderValueBox({
+midterm <- dat$mid%>%mean()%>%round(2)
+    valueBox(midterm, icon = "fa-pencil", color = "primary")
+})
+
+```
+
+### คะแนนปลายภาคเฉลี่ยทุกตอนเรียน(final)
+
+```{r}
+renderValueBox({
+final <- dat$fin%>%mean()%>%round(2)
+    valueBox(final, icon = "fa-flag", color = "primary")
+})
+
+```
+
+Column B {data-height="140" data-width="50"}
+--------------------------------------------------------------------------
+### คะแนนการบ้านของนิสิต 
+
+```{r}
+df <- dat%>%select(user,id,avg.hw, project, mid40, mid20, fin40, fin20, mid, fin)
+
+renderGauge({
+perhw <- df%>%filter(user == input$suser)%>%filter(id == input$spass)%>%select(avg.hw)%>%rowSums()%>%round(2)
+
+  gauge(perhw,min = 0, max = 10, symbol = "/10",
+        gaugeSectors(success = c(8,10), warning = c(5,7), danger = c(0,4)))
+})
+```
+
+### คะแนนโปรเจคของนิสิต 
+
+```{r}
+df <- dat%>%select(user,id,avg.hw, project, mid40, mid20, fin40, fin20, mid, fin)
+
+renderGauge({
+  
+perpj <- df%>%filter(user == input$suser)%>%filter(id == input$spass)%>%select(project)%>%rowSums()%>%round(2)
+
+  gauge(perpj,min = 0, max = 20, symbol = "/20",
+        gaugeSectors(success = c(11.39,20), warning = c(6.04,11.38), danger = c(0,6.03)))
+})
+```
+
+### คะแนนสอบกลางภาคของนิสิต 
+
+```{r}
+df <- dat%>%select(user,id,avg.hw, project, mid40, mid20, fin40, fin20, mid, fin)
+
+renderGauge({
+  
+permid <- df%>%filter(user == input$suser)%>%filter(id == input$spass)%>%select(mid)%>%rowSums()%>%round(2)
+
+  gauge(permid,min = 0, max = 60, symbol = "/60",
+        gaugeSectors(success = c(55.50,60), warning = c(37.28,55.49), danger = c(0,37.27)))
+})
+```
+
+### คะแนนสอบปลายภาคของนิสิต 
+
+```{r}
+df <- dat%>%select(user,id,avg.hw, project, mid40, mid20, fin40, fin20, mid, fin)
+
+renderGauge({
+  
+perfin <- df%>%filter(user == input$suser)%>%filter(id == input$spass)%>%select(fin)%>%rowSums()%>%round(2)
+
+  gauge(perfin,min = 0, max = 60, symbol = "/60",
+        gaugeSectors(success = c(42.03,60), warning = c(22.29,42.02), danger = c(0,22.28)))
+})
+```
+
+
+Column C {data-height="300"}
+-------------------------------------------------------------------------
+
+### ระยะเวลาในการเข้าเรียนรายสัปดาห์
+
+```{r}
+tm <- dat%>%
+   tidyr::pivot_longer(
+     cols = starts_with("t"), 
+     names_to = "week", 
+     values_to = "time", 
+     names_prefix = "week")%>%select(user, id, week, time)%>%
+  mutate(week = recode(week,'t1' = '1', 't2' = '2', 't3' = '3', 't4' = '4', 't5' = '5', 
+                       't6' = '6', 't7' = '7', 't8' = '8', 't9' = '9', 't10' = '10',
+                       't11' = '11', 't12' = '12', 't13' = '13', 't14' = '14'))
+
+renderPlotly({
+  tm%>%filter(user == input$suser)%>%filter(id == input$spass)%>%
+    plot_ly(x = ~week, y = ~time,
+            type = 'scatter',
+            mode = 'markers + lines',
+            hoverinfo = "text",
+            text = ~paste("</br>ระยะเวลาในการเข้าเรียน:", time,"นาที"),
+            textposition = "none",
+            color = I("orange"),
+            showlegend = FALSE)%>%
+    layout(yaxis = list(range = c(1,200),
+                        title = "ระยะเวลาในการเข้าเรียน(นาที)"),
+           xaxis = list(range = c(1,14),
+                        title = "สัปดาห์ที่",
+                        categoryorder = "array",
+                        categoryarray = ~week,
+                        autorange = TRUE))
+})
+```
+
+
+### คะแนนการบ้านรายสัปดาห์
+
+```{r}
+hw <- dat%>%
+   tidyr::pivot_longer(
+     cols = starts_with("hw"), 
+     names_to = "week", 
+     values_to = "score", 
+     names_prefix = "week")%>%select(user, id, week, score)%>%
+  mutate(week = recode(week,'hw1'='1', 'hw2'='2', 'hw3'='3', 'hw4' ='4', 'hw5'='5', 
+                       'hw6'='6', 'hw7'='7', 'hw8'='8', 'hw9'='9', 'hw10'='10',
+                       'hw11'='11', 'hw12'='12', 'hw13'='13', 'hw14'='14'))
+
+renderPlotly({
+  hw%>%filter(user == input$suser)%>%filter(id == input$spass)%>%
+    plot_ly(x = ~week, y = ~score,
+            hoverinfo = "text",
+            text = ~paste("</br>คะแนนการบ้านรายสัปดาห์ :", score),
+            textposition = "none",
+            color = ~score < 5,
+            colors = c("#45b39d","#f1c40f"),
+            showlegend = FALSE)%>%
+    layout(yaxis = list(range = c(1,10),
+                      title = "คะแนนการบ้าน"),
+           xaxis = list(range = c(1,14),
+                      title = "สัปดาห์ที่",
+                      categoryorder = "array",
+                      categoryarray = ~week,
+                      autorange = TRUE))
+})
+
+```
